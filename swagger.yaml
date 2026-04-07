@@ -29,40 +29,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/SlackAvatarResponse'
 
-  "/quiz/attempt":
+  "/coach/answer":
     post:
-      summary: Log a user's quiz attempt
+      operationId: createCoachBotAnswer
+      summary: Log a user's answer for a coach bot quiz question
       description: Records a single user's answer for a quiz question, along with metadata for analytics.
       tags:
-        - Bot Thesis
+        - Coach
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/QuizAttempt'
+              $ref: '#/components/schemas/CoachAnswer'
       responses:
         '200':
-          description: Quiz attempt logged successfully
+          description: Coach bot answer logged successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QuizAttemptResponse'
+                $ref: '#/components/schemas/CoachAnswerResponse'
         '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error" 
+                $ref: "#/components/schemas/Error"
+        '409':
+            description: User has already answered today's question
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/CoachBotDuplicateError' 
   
-  "/quiz/user-details/{id}":
+  "/coach/user-details/{userId}":
       get:
-        summary: Get Slack ID, role, and difficulty for a quiz user
-        description: Fetches the user from Keycloak, retrieves their quiz streak, and calculates the difficulty level for the next quiz question.
+        operationId: getCoachUserDetails
+        summary: Get Slack ID, role, and difficulty for a user
+        description: Fetches the user from Keycloak, retrieves their streak, and calculates the difficulty level for the next coach question.
         tags:
-          - Bot Thesis
+          - Coach
         parameters:
-          - name: id
+          - name: userId
             in: path
             description: Keycloak user ID
             required: true
@@ -74,9 +82,9 @@ paths:
             content:
               application/json:
                 schema:
-                  $ref: '#/components/schemas/QuizUserDetailsResponse'
+                  $ref: '#/components/schemas/CoachUserDetailsResponse'
           "400":
-            description: Bad request - missing path parameter or missing user attributes
+            description: Bad request - Invalid user ID
             content:
               application/json:
                 schema:
@@ -90,21 +98,13 @@ paths:
             content:
               application/json:
                 schema:
-                  type: object
-                  properties:
-                    error:
-                      type: string
-                      example: User not found
+                  $ref: "#/components/schemas/Error"
           "500":
             description: Internal server error
             content:
               application/json:
                 schema:
-                  type: object
-                  properties:
-                    error:
-                      type: string
-                      example: Internal server error
+                  $ref: "#/components/schemas/Error"
                       
   "/pipedrive/salesLeads":
     get:
@@ -900,57 +900,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
-  "/users/{userId}/status":
-    put:
-      operationId: updateUserStatus
-      summary: Update user active status
-      description: Updates the isActive attribute of a user in Keycloak.
-      tags:
-        - Users
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          description: The keycloak user ID used to identify the user.
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - isActive
-              properties:
-                isActive:
-                  type: boolean
-                  description: Whether the user is active or not
-      responses:
-        "200":
-          description: User status updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: User status updated
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"              
 
   "/users/{userId}/status":
     put:
@@ -3474,22 +3423,22 @@ components:
             - `no_avatar`: Slack user exists but has no avatar set.  
             - `email_mismatch`: No Slack user matches the provided email.
     
-    QuizAttempt:
+    CoachAnswer:
       type: object
       required:
-        - slack_user_id
-        - answered_correctly
+        - slackUserId
+        - answeredCorrectly
         - role
         - topic
         - topic_key
         - difficulty
         - date
       properties:
-        slack_user_id:
+        slackUserId:
           type: string
           description: Slack ID of the user who answered
           example: U09BQADE64T
-        answered_correctly:
+        answeredCorrectly:
           type: boolean
           description: Whether the user answered correctly
           example: true
@@ -3502,7 +3451,7 @@ components:
           type: string
           description: Human-readable topic of the question
           example: "CI/CD security best practices"
-        topic_key:
+        topicKey:
           type: string
           description: Canonical topic key used for filtering/logging
           example: ci_cd
@@ -3513,10 +3462,11 @@ components:
           example: medium
         date:
           type: string
+          format: date
           description: Date the question was sent, in Finland timezone (YYYY-MM-DD)
           example: "2026-03-24"
 
-    QuizAttemptResponse:
+    CoachAnswerResponse:
       type: object
       required:
         - success
@@ -3532,7 +3482,7 @@ components:
           description: Current consecutive correct answer streak for the user
           example: 3
 
-    QuizUserDetailsResponse:
+    CoachUserDetailsResponse:
       type: object
       properties:
         slackUserId:
@@ -3549,4 +3499,19 @@ components:
           description: Calculated difficulty based on the user's streak
           enum: [easy, medium, hard]
           example: medium
+    
+    CoachBotDuplicateError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code for duplicate answer
+          example: ALREADY_ANSWERED
+        message:
+          type: string
+          description: Human-readable message
+          example: "User has already answered today's question"
       
